@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -38,15 +39,17 @@ public class ProductoService {
         return producto;
     }
 
-    public Producto crear(Producto nuevo) {
+    public synchronized Producto crear(Producto nuevo) {
+        verificarNoDuplicado(nuevo, null);
         long id = secuenciaId.incrementAndGet();
         nuevo.setId(id);
         inventario.put(id, nuevo);
         return nuevo;
     }
 
-    public Producto actualizar(Long id, Producto datos) {
+    public synchronized Producto actualizar(Long id, Producto datos) {
         Producto existente = buscarPorId(id);
+        verificarNoDuplicado(datos, id);
         existente.setNombre(datos.getNombre());
         existente.setMarca(datos.getMarca());
         existente.setCategoria(datos.getCategoria());
@@ -60,5 +63,24 @@ public class ProductoService {
             throw new ProductoNoEncontradoException(id);
         }
         inventario.remove(id);
+    }
+
+    private void verificarNoDuplicado(Producto datos, Long idIgnorado) {
+        boolean duplicado = inventario.values().stream()
+                .anyMatch(producto -> !producto.getId().equals(idIgnorado)
+                        && mismoProducto(producto, datos));
+        if (duplicado) {
+            throw new ProductoDuplicadoException(datos.getNombre(), datos.getMarca(), datos.getCategoria());
+        }
+    }
+
+    private boolean mismoProducto(Producto primero, Producto segundo) {
+        return normalizar(primero.getNombre()).equals(normalizar(segundo.getNombre()))
+                && normalizar(primero.getMarca()).equals(normalizar(segundo.getMarca()))
+                && normalizar(primero.getCategoria()).equals(normalizar(segundo.getCategoria()));
+    }
+
+    private String normalizar(String valor) {
+        return valor.trim().toLowerCase(Locale.ROOT);
     }
 }
